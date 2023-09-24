@@ -84,7 +84,7 @@ func (o *lisgo) ListDevices() ([]*Scanner, error) {
 
 	devices := make([]*Scanner, 0)
 	for _, d := range devs {
-		devices = append(devices, d.conv2Go(o))
+		devices = append(devices, o.conv2Go(d))
 	}
 
 	return devices, nil
@@ -112,7 +112,7 @@ func (o *lisgo) GetDevice(deviceID string) (*Scanner, error) {
 	devs := (*[maxSliceLen]*C.struct_lis_device_descriptor)(unsafe.Pointer(cdevs))[:arrlen:arrlen]
 
 	for _, d := range devs {
-		dev := d.conv2Go(o)
+		dev := o.conv2Go(d)
 		if dev.DeviceID == deviceID {
 			return dev, nil
 		}
@@ -122,7 +122,7 @@ func (o *lisgo) GetDevice(deviceID string) (*Scanner, error) {
 
 }
 
-func (d *C.struct_lis_device_descriptor) conv2Go(o *lisgo) *Scanner {
+func (o *lisgo) conv2Go(d *C.struct_lis_device_descriptor) *Scanner {
 	return &Scanner{
 		nil,
 		o,
