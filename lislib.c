@@ -252,7 +252,7 @@ struct lis_item** lis_item_list_sources(struct lis_api *api, char* device_id, st
 struct lis_api *lis_api_get_api(struct error_proxy *err) {
 	struct lis_api *impl = NULL;
 	// Disable libinsane normalizer to enable internal image format processing
-	// putenv("LIBINSANE_NORMALIZER_BMP2RAW=0");
+	putenv("LIBINSANE_NORMALIZER_BMP2RAW=0");
 
 	err->err = lis_safebet(&impl);
 	if (err->err != LIS_OK) {
