@@ -9,8 +9,8 @@ import (
 
 	"github.com/apex/log"
 	"github.com/apex/log/handlers/cli"
-	"github.com/foenixx/lisgo"
 	"github.com/oliverpool/gofpdf"
+	"github.com/quickdevel/lisgo"
 )
 
 func printOption(o *lisgo.OptionDescriptor) {

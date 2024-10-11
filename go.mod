@@ -1,4 +1,4 @@
-module github.com/foenixx/lisgo
+module github.com/quickdevel/lisgo
 
 go 1.13
 
