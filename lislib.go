@@ -37,12 +37,7 @@ type (
 	}
 )
 
-//mostly buffer sizes here
-const (
-	ScanSessionCBufferSize = 1024 * 1024 //1MB
-)
-
-//New creates new instances of lis_api using lis_safe_bet
+// New creates new instances of lis_api using lis_safe_bet
 func New() (*lisgo, error) {
 	C.set_log_callbacks()
 	errProxy := getErrorProxy()
@@ -57,12 +52,12 @@ func New() (*lisgo, error) {
 	return &lib, nil
 }
 
-//Close releases lis_api and and all connected objects
+// Close releases lis_api and and all connected objects
 func (o *lisgo) Close() {
 	C.lis_api_cleanup_proxy(o.lisgo)
 }
 
-//ListDevices returns available scanners (online for WIA and all for Twain)
+// ListDevices returns available scanners (online for WIA and all for Twain)
 func (o *lisgo) ListDevices() ([]*Scanner, error) {
 	errProxy := getErrorProxy()
 	defer releaseErrorProxy(errProxy)
@@ -91,7 +86,7 @@ func (o *lisgo) ListDevices() ([]*Scanner, error) {
 
 }
 
-//GetDevice searches thru the list of scanners for a device with specified id
+// GetDevice searches thru the list of scanners for a device with specified id
 func (o *lisgo) GetDevice(deviceID string) (*Scanner, error) {
 
 	errProxy := getErrorProxy()
@@ -133,7 +128,7 @@ func (o *lisgo) conv2Go(d *C.struct_lis_device_descriptor) *Scanner {
 	}
 }
 
-//PaperSource represents a source of paper for scan, i.e flatbed or automatic feeder
+// PaperSource represents a source of paper for scan, i.e flatbed or automatic feeder
 type PaperSource struct {
 	Name   string
 	Kind   C.enum_lis_item_type
@@ -164,7 +159,6 @@ func iterSourcesProxy(cb unsafe.Pointer, sourcePtr *C.struct_lis_item, sourceNam
 //export iterOptionsProxy
 func iterOptionsProxy(cb unsafe.Pointer, opt *C.struct_lis_option_descriptor, valType C.enum_lis_value_type, conType C.int, conPossible unsafe.Pointer) C.int {
 
-
 	res := &OptionDescriptor{
 		optStruct:    opt,
 		Name:         C.GoString(opt.name),
@@ -182,7 +176,7 @@ func iterOptionsProxy(cb unsafe.Pointer, opt *C.struct_lis_option_descriptor, va
 	return 0
 }
 
-//Open calls lis->get_device. Should be called before any of GetSourceByName, IterateOptions are called.
+// Open calls lis->get_device. Should be called before any of GetSourceByName, IterateOptions are called.
 func (d *Scanner) Open() error {
 	var dev *C.char = C.CString(d.DeviceID)
 	defer C.free(unsafe.Pointer(dev))
@@ -197,13 +191,13 @@ func (d *Scanner) Open() error {
 	return nil
 }
 
-//Close should be called after Open to release associated resources
+// Close should be called after Open to release associated resources
 func (d *Scanner) Close() {
 	C.lis_item_close_proxy(d.lisDevice)
 	d.lisDevice = nil
 }
 
-//GetPaperSource returns paper source with specified name if any.
+// GetPaperSource returns paper source with specified name if any.
 // Otherwise it returns nil.
 func (d *Scanner) GetPaperSource(name string) (*PaperSource, error) {
 	var source *PaperSource
@@ -220,7 +214,7 @@ func (d *Scanner) GetPaperSource(name string) (*PaperSource, error) {
 	return source, nil
 }
 
-//IterateSources iterates thru paper sources
+// IterateSources iterates thru paper sources
 func (d *Scanner) IterateSources(f func(*PaperSource) bool) error {
 	if d.lisDevice == nil {
 		var dev *C.char = C.CString(d.DeviceID)
@@ -246,7 +240,7 @@ func (d *Scanner) iterateSourcesInternal(devID *C.char, devRef *C.struct_lis_ite
 	return nil
 }
 
-//IterateOptions iterates thru options of the paper source
+// IterateOptions iterates thru options of the paper source
 func (s *PaperSource) IterateOptions(f func(*OptionDescriptor) bool) error {
 	proxy := iterOptionsCallback{f}
 
@@ -260,7 +254,7 @@ func (s *PaperSource) IterateOptions(f func(*OptionDescriptor) bool) error {
 	return nil
 }
 
-//SetOption accepts string representation of value, converts it to the actual type of the option and sets it.
+// SetOption accepts string representation of value, converts it to the actual type of the option and sets it.
 func (s *PaperSource) SetOption(name string, val string) error {
 	errProxy := getErrorProxy()
 	defer releaseErrorProxy(errProxy)
@@ -275,7 +269,7 @@ func (s *PaperSource) SetOption(name string, val string) error {
 	return nil
 }
 
-//ScanStart creates scanning session
+// ScanStart creates scanning session
 func (s *PaperSource) ScanStart() (*ScanSession, error) {
 	errProxy := getErrorProxy()
 	defer releaseErrorProxy(errProxy)
@@ -288,90 +282,87 @@ func (s *PaperSource) ScanStart() (*ScanSession, error) {
 
 	session := ScanSession{
 		lisScanSession: lisSession,
-		cBuffer:        C.calloc(ScanSessionCBufferSize, C.sizeof_char),
 		//init C.struct_lis_scan_parameters to it's default which is supposedly zeroed memory
 	}
 	return &session, nil
 }
 
-//ScanSession is just a scan session
+// ScanSession is just a scan session
 type ScanSession struct {
 	lisScanSession *C.struct_lis_scan_session
 	//ecError        *CErrorProxy
-	cBuffer unsafe.Pointer
 }
 
-//EndOfFeed indicates that there are no more to read from scanner
+// EndOfFeed indicates that there are no more to read from scanner
 func (s *ScanSession) EndOfFeed() bool {
 	return C.lis_scan_session_end_of_feed_proxy(s.lisScanSession) != 0
 }
 
-//EndOfPage indicates that the current page is over
+// EndOfPage indicates that the current page is over
 func (s *ScanSession) EndOfPage() bool {
 	return C.lis_scan_session_end_of_page_proxy(s.lisScanSession) != 0
 }
 
-//ScanRead reads data from scanner
-func (s *ScanSession) ScanRead() ([]byte, uint64, error) {
+func (s *ScanSession) ScanRead(p []byte) (int, error) {
 	errProxy := getErrorProxy()
 	defer releaseErrorProxy(errProxy)
-	//var err error
-	var arrlen C.size_t = ScanSessionCBufferSize
-	C.lis_scan_session_scan_read_proxy(s.lisScanSession, s.cBuffer, &arrlen, errProxy.GetProxy())
-	if errProxy.ErrNum() != LisOk {
-		return nil, 0, errors.New(errProxy.Error())
-	}
 
-	//Very very strong magic here
-	data := (*[maxSliceLen]byte)(s.cBuffer)[:arrlen:arrlen]
-	return data, uint64(arrlen), nil
+	var arrlen C.size_t = C.size_t(len(p))
+	C.lis_scan_session_scan_read_proxy(s.lisScanSession, unsafe.Pointer(&p[0]), &arrlen, errProxy.GetProxy())
+
+	if errProxy.ErrNum() != LisOk {
+		return 0, errors.New(errProxy.Error())
+	}
+	return int(arrlen), nil
 }
 
 func (s *ScanSession) Cancel() {
 	C.lis_scan_session_cancel_proxy(s.lisScanSession)
 }
 
-//GetScanParameters returns scanning session parameters
+// GetScanParameters returns scanning session parameters
 func (s *ScanSession) GetScanParameters() (*ScanParameters, error) {
 	errProxy := getErrorProxy()
 	defer releaseErrorProxy(errProxy)
+
 	var params ScanParameters
 	C.lis_scan_session_get_scan_parameters_proxy(s.lisScanSession, &params.lisScanParameters, errProxy.GetProxy())
+
 	var err error
 	if errProxy.ErrNum() != LisOk {
 		err = errors.New(errProxy.Error())
 	}
+
 	return &params, err
 }
 
-//Close frees all allocated resources
+// DEPRECATED: Close frees all allocated resources
 func (s *ScanSession) Close() {
-	C.free(s.cBuffer)
+
 }
 
-//Width of the image in pixels. This value is guaranteed to be true when scanning
+// Width of the image in pixels. This value is guaranteed to be true when scanning
 func (sp *ScanParameters) Width() int {
 	return int(sp.lisScanParameters.width)
 }
 
-//Height of the image in pixels. warning This value is *not* guaranteed to be true when scanning.
+// Height of the image in pixels. warning This value is *not* guaranteed to be true when scanning.
 func (sp *ScanParameters) Height() int {
 	return int(sp.lisScanParameters.height)
 }
 
-//ImageFormat is image format. This value is guaranteed to be true when scanning.
+// ImageFormat is image format. This value is guaranteed to be true when scanning.
 func (sp *ScanParameters) ImageFormat() uint32 {
 	return sp.lisScanParameters.format
 }
 
-//ImageFormatStr returns name of the image format
+// ImageFormatStr returns name of the image format
 func (sp *ScanParameters) ImageFormatStr() string {
 	return lisImageFormatNames[sp.ImageFormat()]
 }
 
-
-//ImageSize is estimated image size in bytes. Can be used to pre-allocate memory.
-//This value is *not* guaranteed to be true when scanning.
+// ImageSize is estimated image size in bytes. Can be used to pre-allocate memory.
+// This value is *not* guaranteed to be true when scanning.
 func (sp *ScanParameters) ImageSize() uint {
 	return uint(sp.lisScanParameters.image_size)
 }
@@ -382,23 +373,3 @@ func (sp *ScanParameters) String() string {
 		"Format: %d (%s)\n",
 		sp.Width(), sp.Height(), sp.ImageSize(), sp.ImageFormat(), lisImageFormatNames[sp.ImageFormat()])
 }
-
-//ListSources gets all scan sources (flatbed, auto-feeder)
-/*
-func (d *LisDeviceDescriptor) ListSources() []*PaperSource {
-	sources := C.go_list_sources(d.LisAPI.lisAPI, d.lisDevice)
-	len := C.go_lis_array_length(unsafe.Pointer(sources))
-	const maxLen = 1 << 30
-	//Apply strong magic to get GO slice backed by C null-terminated array
-	slice := (*[maxLen]*C.struct_lis_item)(unsafe.Pointer(sources))[:len:len]
-	fmt.Printf("SOURCES: %+v\n", slice)
-	var res []*PaperSource
-	for _, s := range slice {
-		res = append(res,
-			&PaperSource{
-				s,
-				C.GoString(s.name),
-			})
-	}
-	return res
-}*/

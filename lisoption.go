@@ -11,7 +11,7 @@ import (
 	"unsafe"
 )
 
-//lis_value_type enum
+// lis_value_type enum
 const (
 	LisTypeBool = iota
 	LisTypeInteger
@@ -20,14 +20,14 @@ const (
 	LisTypeImageFormat
 )
 
-//lis_constraint_type enum
+// lis_constraint_type enum
 const (
 	LisConstraintNone = iota
 	LisConstraintRange
 	LisConstraintList
 )
 
-//capabilitites bit mask flags
+// capabilitites bit mask flags
 const (
 	LisCapEmulated  = 1 << 0 // emulated option (either by LibInsane or backend)
 	LisCapAutomatic = 1 << 1 // can be set automatically by the driver
@@ -69,7 +69,7 @@ const (
 	LisImgFormatTiff
 )
 
-//enum lis_unit
+// enum lis_unit
 const (
 	LisUnitNone = iota
 	LisUnitPixel
@@ -192,7 +192,7 @@ type (
 	}
 )
 
-//GetValue obtains value of an option
+// GetValue obtains value of an option
 func (o *OptionDescriptor) GetValue() (*LisValue, error) {
 	if !o.IsReadable() {
 		return nil, errors.New("сannot read the option")
@@ -210,7 +210,7 @@ func (o *OptionDescriptor) GetValue() (*LisValue, error) {
 
 }
 
-//Print option using fmt
+// Print option using fmt
 func (o *OptionDescriptor) String() string {
 	var valStr = ""
 
@@ -239,12 +239,12 @@ func (o *OptionDescriptor) bitTest(mask int) bool {
 	return (o.Capabilities & mask) == mask
 }
 
-//IsReadable indicates that option can be read
+// IsReadable indicates that option can be read
 func (o *OptionDescriptor) IsReadable() bool {
 	return !o.bitTest(LisCapInactive)
 }
 
-//IsWritable indicates that option can be written
+// IsWritable indicates that option can be written
 func (o *OptionDescriptor) IsWritable() bool {
 	return o.bitTest(LisCapSwSelect)
 }
@@ -293,7 +293,7 @@ func (o *OptionDescriptor) formatConstraint() string {
 
 }
 
-//Print prints LisValue depending on type
+// Print prints LisValue depending on type
 func (v *LisValue) String() string {
 	switch v.ValType {
 	case LisTypeBool:
@@ -311,7 +311,7 @@ func (v *LisValue) String() string {
 	}
 }
 
-//NewValue constructs GO LisValue struct from lis_value C-struct
+// NewValue constructs GO LisValue struct from lis_value C-struct
 func NewValue(val *C.union_lis_value, typ C.enum_lis_value_type) *LisValue {
 	var res LisValue
 	res.ValType = typ
@@ -332,7 +332,7 @@ func NewValue(val *C.union_lis_value, typ C.enum_lis_value_type) *LisValue {
 	return &res
 }
 
-//NewConstraint costructs Go ValueConstraint struct from C-structs
+// NewConstraint costructs Go ValueConstraint struct from C-structs
 func NewConstraint(valType C.enum_lis_value_type, conType C.int, conPossible unsafe.Pointer) *OptionConstraint {
 	con := OptionConstraint{
 		ConstraintType: int(conType),

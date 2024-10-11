@@ -2,111 +2,106 @@ package lisgo
 
 import "C"
 import (
-	"bytes"
 	"errors"
-	"github.com/apex/log"
 	"image"
+	"image/color"
 	"image/jpeg"
 	"image/png"
 	"io"
 	"os"
 
-	"golang.org/x/image/bmp"
+	_ "image/gif"
+
+	"github.com/apex/log"
+	_ "golang.org/x/image/bmp"
+	_ "golang.org/x/image/tiff"
 )
 
-//PageReader represents a single page received from scanner
+// PageReader represents a single page received from scanner
 type PageReader struct {
-	Width          int
-	Height         int
-	Format         uint32
-	Session        *ScanSession
-	internalBuffer []byte //a byte array from C-code, read-only
-	readBytes      int    //count of bytes read from internalBuffer, if equal to len(internalbuffer) then the buffer is completely read
+	Width     int
+	Height    int
+	Format    uint32
+	ImageSize uint
+	Session   *ScanSession
 }
 
-//Read portion of data from scanner into a buffer until the page is over. Optimal size of the buffer is ScanSessionCBufferSize.
+// Read portion of data from scanner into a buffer
 func (sb *PageReader) Read(p []byte) (int, error) {
-	var err error
-	var bts int
-	bufcap := len(p)
-
-	//fmt.Printf("read: bufcap: %d, readBytes: %d, len(internalBuffer): %d\n", bufcap, sb.readBytes, len(sb.internalBuffer))
-	if bufcap == 0 {
-		return 0, nil //nothing happened
-	}
-
-	//there are unread data in the internal buffer
-	if sb.readBytes > 0 && sb.readBytes < len(sb.internalBuffer) {
-		rest := len(sb.internalBuffer) - sb.readBytes
-
-		if rest > bufcap {
-			bts = bufcap
-		} else {
-			bts = rest
-		}
-		copy(p, sb.internalBuffer[sb.readBytes:sb.readBytes+bts])
-		sb.readBytes += bts
-		return bts, nil
-	}
-
-	// readBytes is 0 or len(internalBuffer) - first call or no unread data in the buffer left
-	sb.readBytes = 0
-
 	if sb.Session.EndOfPage() {
 		return 0, io.EOF
 	}
 
-	var got uint64
-	sb.internalBuffer, got, err = sb.Session.ScanRead()
-	if err != nil {
-		return int(got), err
-	}
-
-	//fmt.Print("#")
-
-	//and again we have some unread data in the internal buffer with length=got
-
-	if int(got) > bufcap {
-		bts = bufcap
-	} else {
-		bts = int(got)
-	}
-
-	copy(p, sb.internalBuffer[:bts])
-	sb.readBytes += bts
-	return bts, nil
+	return sb.Session.ScanRead(p)
 }
 
-func (sb *PageReader) GetImage() (image.Image, error) {
+// Read all page data
+func (sb *PageReader) ReadToEnd() ([]byte, error) {
+	var result []byte
+	buf := make([]byte, 128*1024)
 
-	log.Debug("reading header")
-	header, buf, err := ReadBMPHeader(sb)
+	for {
+		n, err := sb.Read(buf)
+		if n > 0 {
+			result = append(result, buf[:n]...)
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return result, nil
+}
+
+func (sb *PageReader) readAndDecodeRawRGB24() (image.Image, error) {
+	rawData, err := sb.ReadToEnd()
 	if err != nil {
 		return nil, err
 	}
 
-	if (header.NbBitsPerPixel == 1 || header.NbBitsPerPixel == 8) && header.Compression == 0 {
-		// White and black or Grayscale image without compression
-		data := bytes.Buffer{}
-		// height could be negative, that means image starts from top-left corner instead of bottom-right
-		data.Grow(int(header.PixelDataSize))
-		log.Debug("reading image data")
-		n, err := data.ReadFrom(sb)
-		if err != nil {
-			return nil, err
+	width := sb.Width
+	height := int(len(rawData) / 3 / sb.Width)
+
+	// Create RGBA image with fixed width and height
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			// lef-top to right-bottom
+			// idx := (y*width + x) * 3
+
+			// right-bottom to left-top
+			idx := ((height-1-y)*width + (width - 1 - x)) * 3
+
+			img.Set(x, y, color.RGBA{
+				R: rawData[idx],
+				G: rawData[idx+1],
+				B: rawData[idx+2],
+				A: 255,
+			})
 		}
-		log.WithField("bytes", n).Debug("image data is read")
-		if header.NbBitsPerPixel == 1 {
-			img := NewBmpBwImage(data.Bytes(), header)
-			return img, nil
-		}
-		img := NewBmpGrayImage(data.Bytes(), header)
-		return img, nil
 	}
 
+	return img, nil
+}
+
+func (sb *PageReader) GetImage() (image.Image, error) {
 	log.Debug("reading image data")
-	// pass it to the standard bmp decoder
-	img, err := bmp.Decode(io.MultiReader(bytes.NewReader(buf), sb))
+
+	var img image.Image
+	var err error
+	if sb.Format == LisImgFormatRawRGB24 {
+		// Use custom function for RawRGB24
+		img, err = sb.readAndDecodeRawRGB24()
+	} else {
+		// Try use std image package for other formats
+		// supported formats: bmp, jpeg, gif, tiff
+		img, _, err = image.Decode(sb)
+	}
+
 	log.Debug("image data is read")
 	return img, err
 }
@@ -132,24 +127,25 @@ func (sb *PageReader) WriteToFile(name string, format string) error {
 
 }
 
-//WriteToPng writes image to file
+// WriteToPng writes image to file
 func (sb *PageReader) WriteToPng(name string) error {
 	return sb.WriteToFile(name, "png")
 }
 
-//WriteToJpeg writes image to file
+// WriteToJpeg writes image to file
 func (sb *PageReader) WriteToJpeg(name string) error {
 	return sb.WriteToFile(name, "jpg")
 }
 
-//NewPageReader converts data buffer to image object
+// NewPageReader converts data buffer to image object
 func NewPageReader(session *ScanSession, param *ScanParameters) *PageReader {
 
 	b := PageReader{
-		Width:   param.Width(),
-		Height:  param.Height(),
-		Format:  param.ImageFormat(),
-		Session: session,
+		Width:     param.Width(),
+		Height:    param.Height(),
+		Format:    param.ImageFormat(),
+		ImageSize: param.ImageSize(),
+		Session:   session,
 	}
 
 	return &b

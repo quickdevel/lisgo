@@ -3,8 +3,9 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"github.com/fatih/color"
 	"image/jpeg"
+
+	"github.com/fatih/color"
 
 	"github.com/apex/log"
 	"github.com/apex/log/handlers/cli"
