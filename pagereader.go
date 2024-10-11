@@ -13,7 +13,7 @@ import (
 	_ "image/gif"
 
 	"github.com/apex/log"
-	_ "golang.org/x/image/bmp"
+	_ "github.com/sergeymakinen/go-bmp"
 	_ "golang.org/x/image/tiff"
 )
 
