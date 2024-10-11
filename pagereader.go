@@ -70,11 +70,11 @@ func (sb *PageReader) readAndDecodeRawRGB24() (image.Image, error) {
 
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
-			// lef-top to right-bottom
-			// idx := (y*width + x) * 3
+			// left-top to right-bottom
+			idx := (y*width + x) * 3
 
 			// right-bottom to left-top
-			idx := ((height-1-y)*width + (width - 1 - x)) * 3
+			// idx := ((height-1-y)*width + (width - 1 - x)) * 3
 
 			img.Set(x, y, color.RGBA{
 				R: rawData[idx],
